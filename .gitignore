@@ -1,4 +1,7 @@
 __pycache__/
 *.pyc
 .env
-seen_jobs.json
+# seen_jobs.json - We want to track this for now to persist state across runs if needed, 
+# or at least to prevent the workflow error. 
+# Actually, for GitHub Actions, we usually commit it back.
+
