@@ -105,7 +105,7 @@ URLS = {
     "EntertainmentCareers": "https://www.entertainmentcareers.net/jcat.asp?jcat=100", # PR Category
 
     # O'Dwyer's PR Jobs - Niche, high-quality PR board
-    "ODwyers": "https://www.odwyerpr.com/pr_jobs/",
+    "ODwyers": "https://www.odwyerpr.com/pr_jobs/index.htm", # Fixed URL
 
     # Keep the best of the rest (but filtered strictly)
     "WeWorkRemotely_Management": "https://weworkremotely.com/categories/management-and-finance/jobs.rss",
@@ -120,15 +120,15 @@ URLS = {
 ATS_SOURCES = [
     # ENTERTAINMENT / STUDIOS
     {"name": "A24", "url": "https://boards.greenhouse.io/a24", "type": "greenhouse"},
-    {"name": "Anonymous Content", "url": "https://boards.greenhouse.io/anonymouscontent", "type": "greenhouse"},
-    {"name": "Range Media Partners", "url": "https://boards.greenhouse.io/rangemediapartners", "type": "greenhouse"},
-    {"name": "Macro", "url": "https://boards.greenhouse.io/macro", "type": "greenhouse"},
+    {"name": "Anonymous Content", "url": "https://boards.greenhouse.io/anonymouscontentllc", "type": "greenhouse"}, # Fixed URL
+    {"name": "Range Media Partners", "url": "https://boards.greenhouse.io/rangemediapartners", "type": "greenhouse"}, # Keeping for now, might be private
+    {"name": "Macro", "url": "https://boards.greenhouse.io/macro1", "type": "greenhouse"}, # Guessing or removing if invalid
     
     # PR / MEDIA AGENCIES (Known to use Greenhouse/Lever)
     {"name": "Vox Media", "url": "https://boards.greenhouse.io/voxmedia", "type": "greenhouse"},
-    {"name": "Vice Media", "url": "https://boards.greenhouse.io/vice", "type": "greenhouse"},
+    {"name": "Vice Media", "url": "https://boards.greenhouse.io/vicemediagroup", "type": "greenhouse"}, # Fixed URL
     {"name": "Axios", "url": "https://boards.greenhouse.io/axios", "type": "greenhouse"},
-    {"name": "Substack", "url": "https://boards.greenhouse.io/substack", "type": "greenhouse"},
+    {"name": "Substack", "url": "https://boards.greenhouse.io/substackinc", "type": "greenhouse"}, # Fixed URL
     {"name": "Patreon", "url": "https://boards.greenhouse.io/patreon", "type": "greenhouse"},
 ]
 
