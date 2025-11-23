@@ -342,11 +342,17 @@ class JobAggregator:
             # Strategy 1: Look for ANY link that contains "/jobs/"
             # Greenhouse job links are usually /jobs/123456 or similar (relative)
             # or absolute https://boards.greenhouse.io/company/jobs/12345
+            # NEW: A24 and Axios use 'https://job-boards.greenhouse.io/...' which is different!
             
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 
                 # Check if it looks like a job link
+                # We need to catch:
+                # 1. /jobs/12345 (Relative)
+                # 2. https://boards.greenhouse.io/.../jobs/12345
+                # 3. https://job-boards.greenhouse.io/.../jobs/12345
+                
                 if "/jobs/" in href:
                     title = link.get_text().strip()
                     if not title: continue # Skip empty links
@@ -371,7 +377,12 @@ class JobAggregator:
                     score += 15
                     
                     if score >= config.MIN_SCORE_THRESHOLD:
-                        full_url = f"https://boards.greenhouse.io{href}" if href.startswith("/") else href
+                        # Handle full URLs correctly
+                        if href.startswith("http"):
+                            full_url = href
+                        else:
+                            full_url = f"https://boards.greenhouse.io{href}"
+                            
                         self.jobs.append({
                             "title": title,
                             "company": company_name,

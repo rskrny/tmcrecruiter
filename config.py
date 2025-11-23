@@ -123,8 +123,13 @@ ATS_SOURCES = [
     {"name": "Vox Media", "url": "https://boards.greenhouse.io/voxmedia", "type": "greenhouse"},
     {"name": "Axios", "url": "https://boards.greenhouse.io/axios", "type": "greenhouse"},
     
-    # REMOVED BROKEN SOURCES (Will re-add when correct URLs are found)
-    # Anonymous Content, Range Media, Macro, Vice, Substack, Patreon
+    # NEWLY VERIFIED / TO BE VERIFIED
+    # Anonymous Content: Their careers page lists an email, no board. Removing for now.
+    # Patreon: Uses Lever? Or custom? Let's try Lever.
+    {"name": "Patreon", "url": "https://jobs.lever.co/patreon", "type": "lever"},
+    
+    # Substack: Uses Greenhouse usually.
+    {"name": "Substack", "url": "https://boards.greenhouse.io/substackinc", "type": "greenhouse"},
 ]
 
 # RSS Feed for Working Nomads specifically
