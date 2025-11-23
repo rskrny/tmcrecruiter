@@ -42,6 +42,7 @@ class JobAggregator:
         # Check Negative Keywords first (Immediate Disqualification)
         for kw in config.NEGATIVE_KEYWORDS:
             if kw.lower() in title.lower(): # Stricter on title for negatives
+                print(f"  [SKIP] Negative Keyword '{kw}': {title}")
                 return -1, "N/A"
 
         # Tier 1 Scoring
@@ -67,6 +68,7 @@ class JobAggregator:
         has_pr_title = any(kw.lower() in title.lower() for kw in config.TIER_1_KEYWORDS + config.TIER_2_KEYWORDS)
         
         if is_marketing_title and not has_pr_title:
+            print(f"  [SKIP] Marketing Trap: {title}")
             return -1, "N/A" # Immediate discard. A "Marketing Manager" is not a "PR Manager".
 
         # Location Scoring (Los Angeles / Hybrid)

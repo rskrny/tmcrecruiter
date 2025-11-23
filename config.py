@@ -10,6 +10,10 @@ TIER_1_KEYWORDS = [
     "Public Relations",
     "PR Manager",
     "PR Director",
+    "PR Lead",
+    "Communications Manager",
+    "Communications Director",
+    "Communications Lead",
     "Director of Communications",
     "Head of Communications",
     "Head of PR",
@@ -20,7 +24,8 @@ TIER_1_KEYWORDS = [
     "Director of Public Relations",
     "External Affairs",
     "Corporate Affairs",
-    "Chief Communications Officer"
+    "Chief Communications Officer",
+    "Publicist"
 ]
 
 # TIER 2: THE "BROAD" NET (50 Points)
@@ -113,4 +118,4 @@ WORKING_NOMADS_RSS = "https://www.workingnomads.com/jobs.rss?category=marketing"
 # -----------------------------------------------------------------------------
 # SYSTEM SETTINGS
 # -----------------------------------------------------------------------------
-MIN_SCORE_THRESHOLD = 60  # Only show jobs with at least one Tier 1 or multiple Tier 2 matches
+MIN_SCORE_THRESHOLD = 40  # Lowered from 60 to catch description-matches
