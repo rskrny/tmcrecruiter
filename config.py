@@ -95,7 +95,7 @@ LOCATIONS = [
 
 URLS = {
     # PRSA - Browse Page (Direct list, no search params needed)
-    "PRSA_Browse": "https://jobs.prsa.org/jobs/c-public-relations-jobs.html",
+    "PRSA_Browse": "https://jobs.prsa.org/",
 
     # The Muse - Simplified Query
     "TheMuse": "https://www.themuse.com/api/public/jobs?category=Public%20Relations&page=1",
