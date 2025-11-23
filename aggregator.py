@@ -48,9 +48,15 @@ class JobAggregator:
             if kw.lower() in text:
                 score += 15
         
-        # Penalty for "Marketing" if no Tier 1 match found (to filter out generic marketing)
-        if "marketing" in title.lower() and not tier1_match:
-            score -= 30
+        # CRITICAL FILTER: The "Marketing Trap"
+        # If the job is in a "Marketing" feed but the TITLE doesn't explicitly mention 
+        # PR/Comms keywords, it is likely a Product/Growth marketing role.
+        # We kill the score to prevent false positives.
+        is_marketing_title = "marketing" in title.lower()
+        has_pr_title = any(kw.lower() in title.lower() for kw in config.TIER_1_KEYWORDS + config.TIER_2_KEYWORDS)
+        
+        if is_marketing_title and not has_pr_title:
+            return -1, "N/A" # Immediate discard. A "Marketing Manager" is not a "PR Manager".
 
         # Location Scoring (Los Angeles / Hybrid)
         la_match = False
@@ -76,92 +82,112 @@ class JobAggregator:
 
         return score, location_status
 
-    def fetch_weworkremotely(self):
-        print("Fetching WeWorkRemotely...")
-        urls = [config.URLS["WeWorkRemotely_Marketing"], config.URLS["WeWorkRemotely_Management"]]
+    def fetch_prsa(self):
+        print("Fetching PRSA (Public Relations Society of America)...")
+        urls = [config.URLS["PRSA_Remote"], config.URLS["PRSA_LA"]]
         for url in urls:
             try:
+                # PRSA RSS feeds are standard
                 feed = feedparser.parse(url)
                 for entry in feed.entries:
                     score, loc_status = self.score_job(entry.title, entry.description)
                     if score >= config.MIN_SCORE_THRESHOLD:
                         self.jobs.append({
                             "title": entry.title,
-                            "company": entry.get("author", "Unknown"),
+                            "company": entry.get("author", "Unknown"), # PRSA often puts company in author or title
                             "url": entry.link,
                             "score": score,
                             "salary": self.extract_salary(entry.description),
                             "location": loc_status,
-                            "source": "WeWorkRemotely"
+                            "source": "PRSA Jobcenter"
                         })
             except Exception as e:
-                print(f"Error fetching WWR: {e}")
+                print(f"Error fetching PRSA: {e}")
 
-    def fetch_remotive(self):
-        print("Fetching Remotive...")
+    def fetch_themuse(self):
+        print("Fetching The Muse...")
         try:
-            response = requests.get(config.URLS["Remotive"])
+            # The Muse API returns JSON
+            response = requests.get(config.URLS["TheMuse"])
             data = response.json()
-            for job in data.get("jobs", []):
-                score, loc_status = self.score_job(job["title"], job["description"])
-                if score >= config.MIN_SCORE_THRESHOLD:
-                    self.jobs.append({
-                        "title": job["title"],
-                        "company": job["company_name"],
-                        "url": job["url"],
-                        "score": score,
-                        "salary": job.get("salary") or self.extract_salary(job["description"]),
-                        "location": loc_status,
-                        "source": "Remotive"
-                    })
-        except Exception as e:
-            print(f"Error fetching Remotive: {e}")
+            for job in data.get("results", []):
+                title = job.get("name", "")
+                description = job.get("contents", "")
+                company = job.get("company", {}).get("name", "Unknown")
+                url = job.get("refs", {}).get("landing_page", "")
+                
+                # The Muse locations are a list
+                locations = [loc.get("name") for loc in job.get("locations", [])]
+                loc_str = ", ".join(locations)
+                
+                score, loc_status = self.score_job(title, description)
+                
+                # Boost score if it's explicitly in LA from the API data
+                if "Los Angeles" in loc_str:
+                    score += 20
+                    loc_status = "📍 Los Angeles"
 
-    def fetch_working_nomads(self):
-        print("Fetching Working Nomads...")
-        try:
-            feed = feedparser.parse(config.URLS["WorkingNomads"])
-            for entry in feed.entries:
-                score, loc_status = self.score_job(entry.title, entry.description)
                 if score >= config.MIN_SCORE_THRESHOLD:
                     self.jobs.append({
-                        "title": entry.title,
-                        "company": "Unknown (See Link)", # RSS often hides company in title
-                        "url": entry.link,
+                        "title": title,
+                        "company": company,
+                        "url": url,
                         "score": score,
-                        "salary": self.extract_salary(entry.description),
+                        "salary": self.extract_salary(description),
                         "location": loc_status,
-                        "source": "Working Nomads"
+                        "source": "The Muse"
                     })
         except Exception as e:
-            print(f"Error fetching Working Nomads: {e}")
+            print(f"Error fetching The Muse: {e}")
 
-    def fetch_remoteok(self):
-        # RemoteOK is tricky with bot protection. We'll try a simple RSS parse with headers.
-        print("Fetching RemoteOK...")
+    def fetch_entertainment_careers(self):
+        # This is a placeholder. Real scraping of EC.net requires Selenium/Playwright 
+        # which is heavy for this environment. We will try a basic request, 
+        # but if it fails (403), we skip it to avoid crashing.
+        print("Fetching EntertainmentCareers.net (Experimental)...")
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         try:
-            # Sometimes feedparser fails on RemoteOK due to cloudflare, 
-            # but let's try standard approach first.
-            feed = feedparser.parse(config.URLS["RemoteOK"])
-            for entry in feed.entries:
-                score, loc_status = self.score_job(entry.title, entry.description)
-                if score >= config.MIN_SCORE_THRESHOLD:
-                    self.jobs.append({
-                        "title": entry.title,
-                        "company": entry.get("author", "Unknown"),
-                        "url": entry.link,
-                        "score": score,
-                        "salary": self.extract_salary(entry.description),
-                        "location": loc_status,
-                        "source": "RemoteOK"
-                    })
+            response = requests.get(config.URLS["EntertainmentCareers"], headers=headers, timeout=10)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                # This selector is a guess based on common table structures. 
+                # EC.net structure changes often.
+                # We look for links that contain "job" in the href
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    title = link.get_text().strip()
+                    
+                    if "job" in href and len(title) > 10:
+                        # We don't have the description here, so we score based on Title only
+                        # We give it a slight boost because the SOURCE is high quality
+                        score, loc_status = self.score_job(title, title) 
+                        
+                        # Boost for being on EC.net
+                        score += 10 
+                        
+                        if score >= config.MIN_SCORE_THRESHOLD:
+                            full_url = f"https://www.entertainmentcareers.net{href}" if href.startswith("/") else href
+                            self.jobs.append({
+                                "title": title,
+                                "company": "See Listing",
+                                "url": full_url,
+                                "score": score,
+                                "salary": "Check Listing",
+                                "location": loc_status,
+                                "source": "EntertainmentCareers.net"
+                            })
         except Exception as e:
-            print(f"Error fetching RemoteOK: {e}")
+            print(f"Skipping EntertainmentCareers (Anti-bot likely active): {e}")
 
     def get_jobs(self):
+        self.fetch_prsa()
+        self.fetch_themuse()
+        self.fetch_entertainment_careers()
         self.fetch_weworkremotely()
-        self.fetch_remotive()
-        self.fetch_working_nomads()
+        # self.fetch_remotive() # Disabled: Too much tech noise
+        # self.fetch_working_nomads() # Disabled: Too much tech noise
         self.fetch_remoteok()
         
         # Sort by score descending

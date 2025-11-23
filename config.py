@@ -40,28 +40,30 @@ TIER_2_KEYWORDS = [
 # NEGATIVE KEYWORDS: THE "NOISE" FILTER (Immediate Discard)
 # Roles that are too junior, irrelevant, or technical.
 NEGATIVE_KEYWORDS = [
-    "Intern",
-    "Internship",
-    "Assistant", 
-    "Coordinator", 
-    "Entry Level",
-    "Junior",
-    "Sales",
-    "SDR",
-    "BDR",
-    "Account Executive", 
-    "Customer Support",
-    "Customer Service",
-    "Software",
-    "Engineer",
-    "Developer",
-    "Full Stack",
-    "Designer",
-    "SEO",
+    # Junior / Generic
+    "Intern", "Internship", "Assistant", "Coordinator", "Entry Level", "Junior",
+    
+    # Sales
+    "Sales", "SDR", "BDR", "Account Executive", "Business Development",
+    
+    # Tech / Product
+    "Software", "Engineer", "Developer", "Full Stack", "Designer", "Product Manager", "Project Manager",
+    
+    # The "Wrong" Kind of Marketing (Tech/Growth/Performance)
+    "Product Marketing",
+    "Growth",
+    "Performance Marketing",
+    "Demand Generation",
+    "User Acquisition",
+    "Paid Media",
     "PPC",
-    "Growth Hacker",
-    "Content Writer", # Too junior usually
-    "Social Media Manager" # She partners with them, doesn't do it
+    "SEO",
+    "SEM",
+    "Email Marketing",
+    "Content Marketing", # Usually SEO-focused, not PR
+    "Social Media Manager",
+    "Community Manager",
+    "Digital Marketing"
 ]
 
 # -----------------------------------------------------------------------------
@@ -87,18 +89,26 @@ LOCATIONS = [
 # We broaden the search to capture PR roles that might be miscategorized.
 
 URLS = {
-    # WWR: "Management" often holds Director/VP level Comms roles. "Marketing" holds the rest.
-    "WeWorkRemotely_Marketing": "https://weworkremotely.com/categories/sales-and-marketing/jobs.rss",
+    # PRSA (Public Relations Society of America) - The Gold Standard
+    # We use their RSS feed if available, or we will scrape their search results page.
+    # Note: PRSA uses Web Scribble, which often has an RSS feed at /jobs/rss
+    "PRSA_Remote": "https://jobs.prsa.org/jobs/rss?keywords=Public+Relations&location=Remote",
+    "PRSA_LA": "https://jobs.prsa.org/jobs/rss?keywords=Public+Relations&location=Los+Angeles%2C+CA",
+
+    # The Muse - Good for Agency/Media culture
+    # They have a hidden RSS feed for searches usually, or we scrape the JSON API.
+    # For simplicity in this version, we will use their internal API endpoint if possible, 
+    # or fall back to a standard feed if we can find one. 
+    # Actually, The Muse has a public API: https://www.themuse.com/api/public/jobs
+    "TheMuse": "https://www.themuse.com/api/public/jobs?category=Public%20Relations&category=Creative%20%26%20Design&category=Marketing&location=Los%20Angeles%2C%20CA&location=Flexible%20%2F%20Remote&page=1",
+
+    # EntertainmentCareers.net - The Hollywood Standard
+    # Hard to scrape. We will try the main listing page.
+    "EntertainmentCareers": "https://www.entertainmentcareers.net/jcat.asp?jcat=100", # PR Category
+
+    # Keep the best of the rest (but filtered strictly)
     "WeWorkRemotely_Management": "https://weworkremotely.com/categories/management-and-finance/jobs.rss",
-    
-    # Remotive: We will fetch the full list or broader categories if possible, but 'marketing' is the main bucket.
-    "Remotive": "https://remotive.com/api/remote-jobs?category=marketing",
-    
-    # RemoteOK: We can search by tag.
     "RemoteOK": "https://remoteok.com/remote-communications-jobs.rss",
-    
-    # WorkingNomads:
-    "WorkingNomads": "https://www.workingnomads.com/jobs.rss?category=management&category=marketing"
 }
 
 # RSS Feed for Working Nomads specifically
