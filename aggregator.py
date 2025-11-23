@@ -46,6 +46,40 @@ class JobAggregator:
             return match.group(1)
         return "Not listed"
 
+    def fetch_job_details(self, url):
+        """Fetches the job detail page to extract Salary and Location."""
+        try:
+            self.random_sleep()
+            response = self.scraper.get(url, headers=self.get_headers())
+            if response.status_code != 200:
+                return "Check Listing", "Unknown"
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            text = soup.get_text(" ", strip=True)
+            
+            # Salary
+            salary = self.extract_salary(text)
+            
+            # Location
+            location = "Unknown"
+            if "hybrid" in text.lower():
+                location = "Hybrid"
+            elif "remote" in text.lower():
+                location = "Remote"
+            elif "on-site" in text.lower() or "onsite" in text.lower():
+                location = "On-site"
+                
+            # Try to find specific location metadata if possible (Greenhouse/Lever specific)
+            # Greenhouse often has <div class="location">
+            gh_loc = soup.find(class_="location")
+            if gh_loc:
+                location = f"{gh_loc.get_text().strip()} ({location})"
+                
+            return salary, location
+            
+        except Exception:
+            return "Check Listing", "Unknown"
+
     def score_job(self, title, description):
         """Calculates a score (0-100+) based on keyword matches."""
         score = 0
@@ -87,6 +121,13 @@ class JobAggregator:
         if is_marketing_title and not has_pr_title:
             print(f"  [SKIP] Marketing Trap: {title}")
             return -1, "N/A" # Immediate discard. A "Marketing Manager" is not a "PR Manager".
+
+        # STRICTER FILTERING:
+        # If no Tier 1 keyword is present, we require a very high score (meaning multiple Tier 2s + Location)
+        # or we discard it. This prevents "Executive Assistant" from passing just because it's in LA.
+        if not tier1_match and score < 70:
+             # print(f"  [SKIP] Weak Match (No Tier 1): {title} ({score})")
+             return -1, "N/A"
 
         # Location Scoring (Los Angeles / Hybrid)
         la_match = False
@@ -385,14 +426,20 @@ class JobAggregator:
                             full_url = href
                         else:
                             full_url = f"https://boards.greenhouse.io{href}"
-                            
+                        
+                        # DEEP SCRAPE: Fetch details for Salary & Better Location
+                        salary, detailed_loc = self.fetch_job_details(full_url)
+                        
+                        # Prefer detailed location if found
+                        final_loc = detailed_loc if detailed_loc != "Unknown" else loc_status
+
                         self.jobs.append({
                             "title": title,
                             "company": company_name,
                             "url": full_url,
                             "score": score,
-                            "salary": "Check Listing",
-                            "location": loc_status,
+                            "salary": salary,
+                            "location": final_loc,
                             "source": f"{company_name} (Direct)"
                         })
                         found_count += 1
@@ -431,13 +478,19 @@ class JobAggregator:
                 score += 15 # Boost
                 
                 if score >= config.MIN_SCORE_THRESHOLD:
+                    # DEEP SCRAPE: Fetch details for Salary & Better Location
+                    salary, detailed_loc = self.fetch_job_details(href)
+                    
+                    # Prefer detailed location if found
+                    final_loc = detailed_loc if detailed_loc != "Unknown" else loc_status
+
                     self.jobs.append({
                         "title": title,
                         "company": company_name,
                         "url": href,
                         "score": score,
-                        "salary": "Check Listing",
-                        "location": loc_status,
+                        "salary": salary,
+                        "location": final_loc,
                         "source": f"{company_name} (Direct)"
                     })
                     found_count += 1
