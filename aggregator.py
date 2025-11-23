@@ -201,6 +201,9 @@ class JobAggregator:
             print(f"Error fetching The Muse: {e}")
 
     def fetch_odwyers(self):
+        if "ODwyers" not in config.URLS:
+            return
+            
         print("Fetching O'Dwyer's PR Jobs...")
         try:
             response = self.scraper.get(config.URLS["ODwyers"], headers=self.get_headers())
