@@ -3,12 +3,23 @@ import feedparser
 from bs4 import BeautifulSoup
 import time
 import config
-
 import re
+import cloudscraper
+from fake_useragent import UserAgent
 
 class JobAggregator:
     def __init__(self):
         self.jobs = []
+        self.scraper = cloudscraper.create_scraper() # Creates a Cloudflare-bypassing session
+        self.ua = UserAgent()
+
+    def get_headers(self):
+        return {
+            'User-Agent': self.ua.random,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.google.com/'
+        }
 
     def extract_salary(self, text):
         """Attempts to extract salary information from text."""
@@ -84,31 +95,50 @@ class JobAggregator:
 
     def fetch_prsa(self):
         print("Fetching PRSA (Public Relations Society of America)...")
-        urls = [config.URLS["PRSA_Remote"], config.URLS["PRSA_LA"]]
-        for url in urls:
-            try:
-                # PRSA RSS feeds are standard
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    score, loc_status = self.score_job(entry.title, entry.description)
-                    if score >= config.MIN_SCORE_THRESHOLD:
-                        self.jobs.append({
-                            "title": entry.title,
-                            "company": entry.get("author", "Unknown"), # PRSA often puts company in author or title
-                            "url": entry.link,
-                            "score": score,
-                            "salary": self.extract_salary(entry.description),
-                            "location": loc_status,
-                            "source": "PRSA Jobcenter"
-                        })
-            except Exception as e:
-                print(f"Error fetching PRSA: {e}")
+        try:
+            response = self.scraper.get(config.URLS["PRSA_Browse"], headers=self.get_headers())
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                # Based on debug analysis, PRSA links are direct <a> tags in the browse list
+                # We look for links that do NOT start with / (relative) but are job posts?
+                # Actually, WebScribble usually puts job links in <h3> or similar.
+                # Let's be broad: Any link with text > 10 chars that isn't a nav link.
+                
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    title = link.get_text().strip()
+                    
+                    # Filter out navigation noise
+                    if len(title) < 10 or "Browse" in title or "Contact" in title or "About" in title:
+                        continue
+                        
+                    # PRSA job links usually end in .html or have /job/
+                    if "/job/" in href or href.endswith(".html"):
+                         # Avoid category links "c-public-relations.html"
+                        if "c-" in href and "jobs.html" in href:
+                            continue
+
+                        full_url = f"https://jobs.prsa.org{href}" if href.startswith("/") else href
+                        
+                        score, loc_status = self.score_job(title, title)
+                        if score >= config.MIN_SCORE_THRESHOLD:
+                            self.jobs.append({
+                                "title": title,
+                                "company": "See Listing",
+                                "url": full_url,
+                                "score": score,
+                                "salary": "Check Listing",
+                                "location": loc_status,
+                                "source": "PRSA Jobcenter"
+                            })
+        except Exception as e:
+            print(f"Error fetching PRSA: {e}")
 
     def fetch_themuse(self):
         print("Fetching The Muse...")
         try:
             # The Muse API returns JSON
-            response = requests.get(config.URLS["TheMuse"])
+            response = self.scraper.get(config.URLS["TheMuse"], headers=self.get_headers())
             data = response.json()
             for job in data.get("results", []):
                 title = job.get("name", "")
@@ -140,28 +170,53 @@ class JobAggregator:
         except Exception as e:
             print(f"Error fetching The Muse: {e}")
 
-    def fetch_entertainment_careers(self):
-        # This is a placeholder. Real scraping of EC.net requires Selenium/Playwright 
-        # which is heavy for this environment. We will try a basic request, 
-        # but if it fails (403), we skip it to avoid crashing.
-        print("Fetching EntertainmentCareers.net (Experimental)...")
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+    def fetch_odwyers(self):
+        print("Fetching O'Dwyer's PR Jobs...")
         try:
-            response = requests.get(config.URLS["EntertainmentCareers"], headers=headers, timeout=10)
+            response = self.scraper.get(config.URLS["ODwyers"], headers=self.get_headers())
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
-                # This selector is a guess based on common table structures. 
-                # EC.net structure changes often.
-                # We look for links that contain "job" in the href
+                # O'Dwyer's is a simple table or list. 
+                # Looking for <tr> with job details.
+                # This is a guess at their structure, usually they have <a> tags with job titles.
                 for link in soup.find_all('a', href=True):
                     href = link['href']
                     title = link.get_text().strip()
                     
-                    if "job" in href and len(title) > 10:
-                        # We don't have the description here, so we score based on Title only
-                        # We give it a slight boost because the SOURCE is high quality
+                    # Filter for job-like links (usually contain 'job' or are in a specific list)
+                    # O'Dwyer's links often look like "job_view.php?job_id=..."
+                    if "job_view" in href or "job_id" in href:
+                        score, loc_status = self.score_job(title, title)
+                        if score >= config.MIN_SCORE_THRESHOLD:
+                            full_url = f"https://www.odwyerpr.com/pr_jobs/{href}" if not href.startswith("http") else href
+                            self.jobs.append({
+                                "title": title,
+                                "company": "See Listing",
+                                "url": full_url,
+                                "score": score,
+                                "salary": "Check Listing",
+                                "location": loc_status,
+                                "source": "O'Dwyer's PR"
+                            })
+        except Exception as e:
+            print(f"Error fetching O'Dwyer's: {e}")
+
+    def fetch_entertainment_careers(self):
+        print("Fetching EntertainmentCareers.net (Stealth Mode)...")
+        try:
+            # Use cloudscraper to bypass Cloudflare/403
+            response = self.scraper.get(config.URLS["EntertainmentCareers"], headers=self.get_headers())
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    title = link.get_text().strip()
+                    
+                    # Precise Logic based on Debug Analysis:
+                    # Valid Job URL: /company-name/job-title/job/123456/
+                    # We look for "/job/" in the path AND a numeric ID at the end (usually)
+                    
+                    if "/job/" in href and len(title) > 10:
                         score, loc_status = self.score_job(title, title) 
                         
                         # Boost for being on EC.net
@@ -179,12 +234,54 @@ class JobAggregator:
                                 "source": "EntertainmentCareers.net"
                             })
         except Exception as e:
-            print(f"Skipping EntertainmentCareers (Anti-bot likely active): {e}")
+            print(f"Skipping EntertainmentCareers: {e}")
+
+    def fetch_weworkremotely(self):
+        print("Fetching WeWorkRemotely...")
+        # We only use the Management feed now as per config
+        urls = [config.URLS["WeWorkRemotely_Management"]]
+        for url in urls:
+            try:
+                feed = feedparser.parse(url)
+                for entry in feed.entries:
+                    score, loc_status = self.score_job(entry.title, entry.description)
+                    if score >= config.MIN_SCORE_THRESHOLD:
+                        self.jobs.append({
+                            "title": entry.title,
+                            "company": entry.get("author", "Unknown"),
+                            "url": entry.link,
+                            "score": score,
+                            "salary": self.extract_salary(entry.description),
+                            "location": loc_status,
+                            "source": "WeWorkRemotely"
+                        })
+            except Exception as e:
+                print(f"Error fetching WWR: {e}")
+
+    def fetch_remoteok(self):
+        print("Fetching RemoteOK...")
+        try:
+            feed = feedparser.parse(config.URLS["RemoteOK"])
+            for entry in feed.entries:
+                score, loc_status = self.score_job(entry.title, entry.description)
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    self.jobs.append({
+                        "title": entry.title,
+                        "company": entry.get("author", "Unknown"),
+                        "url": entry.link,
+                        "score": score,
+                        "salary": self.extract_salary(entry.description),
+                        "location": loc_status,
+                        "source": "RemoteOK"
+                    })
+        except Exception as e:
+            print(f"Error fetching RemoteOK: {e}")
 
     def get_jobs(self):
         self.fetch_prsa()
         self.fetch_themuse()
         self.fetch_entertainment_careers()
+        self.fetch_odwyers()
         self.fetch_weworkremotely()
         # self.fetch_remotive() # Disabled: Too much tech noise
         # self.fetch_working_nomads() # Disabled: Too much tech noise
