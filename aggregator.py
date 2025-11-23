@@ -331,39 +331,54 @@ class JobAggregator:
             soup = BeautifulSoup(response.content, 'html.parser')
             found_count = 0
             
-            # Greenhouse usually lists jobs in div.opening
-            # We look for the job title link
-            for opening in soup.find_all('div', class_='opening'):
-                link = opening.find('a')
-                if not link: continue
-                
-                title = link.get_text().strip()
+            # Greenhouse Structure Analysis (Updated):
+            # Some boards use div.opening, others use tr.job-post or similar.
+            # A24 uses a table-like structure: div.job-posts--table
+            # We need to be more generic to catch different themes.
+            
+            # Strategy 1: Look for ANY link that contains "/jobs/"
+            # Greenhouse job links are usually /jobs/123456 or similar (relative)
+            # or absolute https://boards.greenhouse.io/company/jobs/12345
+            
+            for link in soup.find_all('a', href=True):
                 href = link['href']
                 
-                # Location is often in a span class="location"
-                location_span = opening.find('span', class_='location')
-                location_text = location_span.get_text().strip() if location_span else "Unknown"
-                
-                # Combine title + location for scoring context
-                full_text = f"{title} {location_text}"
-                
-                score, loc_status = self.score_job(title, full_text)
-                
-                # Boost for direct agency match
-                score += 15
-                
-                if score >= config.MIN_SCORE_THRESHOLD:
-                    full_url = f"https://boards.greenhouse.io{href}" if href.startswith("/") else href
-                    self.jobs.append({
-                        "title": title,
-                        "company": company_name,
-                        "url": full_url,
-                        "score": score,
-                        "salary": "Check Listing",
-                        "location": loc_status,
-                        "source": f"{company_name} (Direct)"
-                    })
-                    found_count += 1
+                # Check if it looks like a job link
+                if "/jobs/" in href:
+                    title = link.get_text().strip()
+                    if not title: continue # Skip empty links
+                    
+                    # Try to find location in the same container (parent or sibling)
+                    # This is tricky without specific structure, so we default to Unknown
+                    # unless we find a clear location element nearby.
+                    location_text = "Unknown"
+                    
+                    # Common pattern: Link is in a row, location is in a sibling cell/div
+                    # Let's check the parent text
+                    parent_text = link.parent.get_text().strip() if link.parent else ""
+                    if len(parent_text) > len(title):
+                        # The parent text likely contains the location too
+                        full_text = parent_text
+                    else:
+                        full_text = title
+
+                    score, loc_status = self.score_job(title, full_text)
+                    
+                    # Boost for direct agency match
+                    score += 15
+                    
+                    if score >= config.MIN_SCORE_THRESHOLD:
+                        full_url = f"https://boards.greenhouse.io{href}" if href.startswith("/") else href
+                        self.jobs.append({
+                            "title": title,
+                            "company": company_name,
+                            "url": full_url,
+                            "score": score,
+                            "salary": "Check Listing",
+                            "location": loc_status,
+                            "source": f"{company_name} (Direct)"
+                        })
+                        found_count += 1
             print(f"  - Found {found_count} matches from {company_name}")
             
         except Exception as e:
