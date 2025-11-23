@@ -2,6 +2,7 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 import time
+import random
 import config
 import re
 import cloudscraper
@@ -10,15 +11,29 @@ from fake_useragent import UserAgent
 class JobAggregator:
     def __init__(self):
         self.jobs = []
-        self.scraper = cloudscraper.create_scraper() # Creates a Cloudflare-bypassing session
+        # Browser-like configuration to avoid detection
+        self.scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
         self.ua = UserAgent()
+
+    def random_sleep(self):
+        """Sleeps for a random amount of time to mimic human behavior."""
+        sleep_time = random.uniform(2.5, 5.5)
+        time.sleep(sleep_time)
 
     def get_headers(self):
         return {
             'User-Agent': self.ua.random,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.google.com/'
+            'Referer': 'https://www.google.com/',
+            'DNT': '1', # Do Not Track
+            'Upgrade-Insecure-Requests': '1'
         }
 
     def extract_salary(self, text):
@@ -304,11 +319,115 @@ class JobAggregator:
         except Exception as e:
             print(f"Error fetching RemoteOK: {e}")
 
+    def fetch_greenhouse(self, url, company_name):
+        print(f"Fetching {company_name} (Greenhouse)...")
+        self.random_sleep()
+        try:
+            response = self.scraper.get(url, headers=self.get_headers())
+            if response.status_code != 200:
+                print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
+                return
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            found_count = 0
+            
+            # Greenhouse usually lists jobs in div.opening
+            # We look for the job title link
+            for opening in soup.find_all('div', class_='opening'):
+                link = opening.find('a')
+                if not link: continue
+                
+                title = link.get_text().strip()
+                href = link['href']
+                
+                # Location is often in a span class="location"
+                location_span = opening.find('span', class_='location')
+                location_text = location_span.get_text().strip() if location_span else "Unknown"
+                
+                # Combine title + location for scoring context
+                full_text = f"{title} {location_text}"
+                
+                score, loc_status = self.score_job(title, full_text)
+                
+                # Boost for direct agency match
+                score += 15
+                
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    full_url = f"https://boards.greenhouse.io{href}" if href.startswith("/") else href
+                    self.jobs.append({
+                        "title": title,
+                        "company": company_name,
+                        "url": full_url,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": loc_status,
+                        "source": f"{company_name} (Direct)"
+                    })
+                    found_count += 1
+            print(f"  - Found {found_count} matches from {company_name}")
+            
+        except Exception as e:
+            print(f"Error fetching {company_name}: {e}")
+
+    def fetch_lever(self, url, company_name):
+        print(f"Fetching {company_name} (Lever)...")
+        self.random_sleep()
+        try:
+            response = self.scraper.get(url, headers=self.get_headers())
+            if response.status_code != 200:
+                print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
+                return
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            found_count = 0
+            
+            # Lever usually lists jobs in a.posting-title
+            for link in soup.find_all('a', class_='posting-title'):
+                href = link['href']
+                
+                # Title is in h5 usually
+                title_elem = link.find('h5')
+                title = title_elem.get_text().strip() if title_elem else link.get_text().strip()
+                
+                # Location
+                loc_elem = link.find('span', class_='sort-by-location')
+                location_text = loc_elem.get_text().strip() if loc_elem else "Unknown"
+                
+                full_text = f"{title} {location_text}"
+                
+                score, loc_status = self.score_job(title, full_text)
+                score += 15 # Boost
+                
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    self.jobs.append({
+                        "title": title,
+                        "company": company_name,
+                        "url": href,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": loc_status,
+                        "source": f"{company_name} (Direct)"
+                    })
+                    found_count += 1
+            print(f"  - Found {found_count} matches from {company_name}")
+            
+        except Exception as e:
+            print(f"Error fetching {company_name}: {e}")
+
+    def fetch_ats_sources(self):
+        """Iterates through configured ATS sources."""
+        for source in config.ATS_SOURCES:
+            if source["type"] == "greenhouse":
+                self.fetch_greenhouse(source["url"], source["name"])
+            elif source["type"] == "lever":
+                self.fetch_lever(source["url"], source["name"])
+
     def get_jobs(self):
         self.fetch_prsa()
         self.fetch_themuse()
         self.fetch_entertainment_careers()
         self.fetch_odwyers()
+        self.fetch_ats_sources() # NEW: Direct Agency Scraping
         self.fetch_weworkremotely()
         # self.fetch_remotive() # Disabled: Too much tech noise
         # self.fetch_working_nomads() # Disabled: Too much tech noise

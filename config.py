@@ -112,6 +112,26 @@ URLS = {
     "RemoteOK": "https://remoteok.com/remote-communications-jobs.rss",
 }
 
+# -----------------------------------------------------------------------------
+# DIRECT AGENCY / STUDIO BOARDS (ATS)
+# -----------------------------------------------------------------------------
+# These are the "Hidden Gems". We go directly to the source.
+# We support 'greenhouse' and 'lever' board types automatically.
+ATS_SOURCES = [
+    # ENTERTAINMENT / STUDIOS
+    {"name": "A24", "url": "https://boards.greenhouse.io/a24", "type": "greenhouse"},
+    {"name": "Anonymous Content", "url": "https://boards.greenhouse.io/anonymouscontent", "type": "greenhouse"},
+    {"name": "Range Media Partners", "url": "https://boards.greenhouse.io/rangemediapartners", "type": "greenhouse"},
+    {"name": "Macro", "url": "https://boards.greenhouse.io/macro", "type": "greenhouse"},
+    
+    # PR / MEDIA AGENCIES (Known to use Greenhouse/Lever)
+    {"name": "Vox Media", "url": "https://boards.greenhouse.io/voxmedia", "type": "greenhouse"},
+    {"name": "Vice Media", "url": "https://boards.greenhouse.io/vice", "type": "greenhouse"},
+    {"name": "Axios", "url": "https://boards.greenhouse.io/axios", "type": "greenhouse"},
+    {"name": "Substack", "url": "https://boards.greenhouse.io/substack", "type": "greenhouse"},
+    {"name": "Patreon", "url": "https://boards.greenhouse.io/patreon", "type": "greenhouse"},
+]
+
 # RSS Feed for Working Nomads specifically
 WORKING_NOMADS_RSS = "https://www.workingnomads.com/jobs.rss?category=marketing"
 
