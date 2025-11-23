@@ -112,20 +112,17 @@ class JobAggregator:
                 score += 15
         
         # CRITICAL FILTER: The "Marketing Trap"
-        # If the job is in a "Marketing" feed but the TITLE doesn't explicitly mention 
-        # PR/Comms keywords, it is likely a Product/Growth marketing role.
-        # We kill the score to prevent false positives.
-        is_marketing_title = "marketing" in title.lower()
-        has_pr_title = any(kw.lower() in title.lower() for kw in config.TIER_1_KEYWORDS + config.TIER_2_KEYWORDS)
-        
-        if is_marketing_title and not has_pr_title:
-            print(f"  [SKIP] Marketing Trap: {title}")
-            return -1, "N/A" # Immediate discard. A "Marketing Manager" is not a "PR Manager".
+        # REVISED: In Entertainment/Music, "Marketing" is often PR-adjacent (Artist Marketing).
+        # We removed the hard block. Instead, we rely on NEGATIVE_KEYWORDS to catch "Growth/Performance" marketing.
+        # We also give a score boost to "Marketing" titles to help them pass the strict threshold
+        # if they are not explicitly "Growth" or "Digital".
+        if "marketing" in title.lower():
+            score += 30 # Treat as a valid keyword, similar to Tier 1, but rely on negatives to filter bad ones.
 
         # STRICTER FILTERING:
         # If no Tier 1 keyword is present, we require a very high score (meaning multiple Tier 2s + Location)
         # or we discard it. This prevents "Executive Assistant" from passing just because it's in LA.
-        if not tier1_match and score < 70:
+        if not tier1_match and score < 60: # Lowered from 70 to 60 to allow Marketing (30) + Location (40) to pass
              # print(f"  [SKIP] Weak Match (No Tier 1): {title} ({score})")
              return -1, "N/A"
 
