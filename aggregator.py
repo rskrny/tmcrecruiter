@@ -56,7 +56,9 @@ class JobAggregator:
 
         # Check Negative Keywords first (Immediate Disqualification)
         for kw in config.NEGATIVE_KEYWORDS:
-            if kw.lower() in title.lower(): # Stricter on title for negatives
+            # Use regex for word boundaries to avoid "Intern" matching "International" or "Internal"
+            pattern = r'\b' + re.escape(kw.lower()) + r'\b'
+            if re.search(pattern, title.lower()): 
                 print(f"  [SKIP] Negative Keyword '{kw}': {title}")
                 return -1, "N/A"
 
@@ -354,7 +356,8 @@ class JobAggregator:
                 # 3. https://job-boards.greenhouse.io/.../jobs/12345
                 
                 if "/jobs/" in href:
-                    title = link.get_text().strip()
+                    # Use separator=" " to avoid "TitleLocation" mashups
+                    title = link.get_text(" ").strip()
                     if not title: continue # Skip empty links
                     
                     # Try to find location in the same container (parent or sibling)

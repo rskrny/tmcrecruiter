@@ -122,6 +122,16 @@ ATS_SOURCES = [
     {"name": "A24", "url": "https://boards.greenhouse.io/a24", "type": "greenhouse"},
     {"name": "Vox Media", "url": "https://boards.greenhouse.io/voxmedia", "type": "greenhouse"},
     {"name": "Axios", "url": "https://boards.greenhouse.io/axios", "type": "greenhouse"},
+    {"name": "Sony Music", "url": "https://boards.greenhouse.io/sonymusic", "type": "greenhouse"},
+    {"name": "Roku", "url": "https://boards.greenhouse.io/roku", "type": "greenhouse"},
+    {"name": "BuzzFeed", "url": "https://boards.greenhouse.io/buzzfeed", "type": "greenhouse"},
+    {"name": "Vimeo", "url": "https://boards.greenhouse.io/vimeo", "type": "greenhouse"},
+    {"name": "Discord", "url": "https://boards.greenhouse.io/discord", "type": "greenhouse"},
+    {"name": "Twitch", "url": "https://boards.greenhouse.io/twitch", "type": "greenhouse"},
+    
+    # LEVER BOARDS
+    {"name": "Spotify", "url": "https://jobs.lever.co/spotify", "type": "lever"},
+    {"name": "Skillshare", "url": "https://jobs.lever.co/skillshare", "type": "lever"},
     
     # REMOVED BROKEN SOURCES
     # Patreon (Lever 404), Substack (Greenhouse 404)
