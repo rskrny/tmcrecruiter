@@ -31,16 +31,28 @@ jobs:
 
     - name: Ensure seen_jobs.json exists
       run: |
+        pwd
+        ls -la
         if [ ! -f seen_jobs.json ]; then
           echo "[]" > seen_jobs.json
+          echo "Created seen_jobs.json"
+        else
+          echo "seen_jobs.json already exists"
         fi
-        ls -la
+        ls -la seen_jobs.json
 
     - name: Commit and Push changes
       # We need to save the updated seen_jobs.json back to the repo
       run: |
         git config --global user.name 'Sniper Bot'
         git config --global user.email 'bot@noreply.github.com'
-        git add -f seen_jobs.json
+        
+        # Debug: Check git status
+        git status
+        
+        # Use 'git add .' to stage all changes (including seen_jobs.json)
+        # This avoids the 'pathspec' error if the file is missing for some reason
+        git add .
+        
         # Only commit if there are changes
         git diff --quiet && git diff --staged --quiet || (git commit -m "Update seen jobs [skip ci]" && git push)

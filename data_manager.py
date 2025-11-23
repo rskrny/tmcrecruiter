@@ -25,6 +25,9 @@ def save_seen_jobs(job_urls):
     current_seen = set(load_seen_jobs())
     current_seen.update(job_urls)
     
+    abs_path = os.path.abspath(DATA_FILE)
+    print(f"Saving seen jobs to: {abs_path}")
+    
     with open(DATA_FILE, 'w') as f:
         json.dump(list(current_seen), f)
 
