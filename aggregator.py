@@ -99,40 +99,46 @@ class JobAggregator:
         print("Fetching PRSA (Public Relations Society of America)...")
         try:
             response = self.scraper.get(config.URLS["PRSA_Browse"], headers=self.get_headers())
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                # Based on debug analysis, PRSA links are direct <a> tags in the browse list
-                # We look for links that do NOT start with / (relative) but are job posts?
-                # Actually, WebScribble usually puts job links in <h3> or similar.
-                # Let's be broad: Any link with text > 10 chars that isn't a nav link.
-                
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    title = link.get_text().strip()
-                    
-                    # Filter out navigation noise
-                    if len(title) < 10 or "Browse" in title or "Contact" in title or "About" in title:
-                        continue
-                        
-                    # PRSA job links usually end in .html or have /job/
-                    if "/job/" in href or href.endswith(".html"):
-                         # Avoid category links "c-public-relations.html"
-                        if "c-" in href and "jobs.html" in href:
-                            continue
+            if response.status_code != 200:
+                print(f"  [ERROR] PRSA returned status code: {response.status_code}")
+                return
 
-                        full_url = f"https://jobs.prsa.org{href}" if href.startswith("/") else href
-                        
-                        score, loc_status = self.score_job(title, title)
-                        if score >= config.MIN_SCORE_THRESHOLD:
-                            self.jobs.append({
-                                "title": title,
-                                "company": "See Listing",
-                                "url": full_url,
-                                "score": score,
-                                "salary": "Check Listing",
-                                "location": loc_status,
-                                "source": "PRSA Jobcenter"
-                            })
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # Based on debug analysis, PRSA links are direct <a> tags in the browse list
+            # We look for links that do NOT start with / (relative) but are job posts?
+            # Actually, WebScribble usually puts job links in <h3> or similar.
+            # Let's be broad: Any link with text > 10 chars that isn't a nav link.
+            
+            found_count = 0
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                title = link.get_text().strip()
+                
+                # Filter out navigation noise
+                if len(title) < 10 or "Browse" in title or "Contact" in title or "About" in title:
+                    continue
+                    
+                # PRSA job links usually end in .html or have /job/
+                if "/job/" in href or href.endswith(".html"):
+                        # Avoid category links "c-public-relations.html"
+                    if "c-" in href and "jobs.html" in href:
+                        continue
+
+                    full_url = f"https://jobs.prsa.org{href}" if href.startswith("/") else href
+                    
+                    score, loc_status = self.score_job(title, title)
+                    if score >= config.MIN_SCORE_THRESHOLD:
+                        self.jobs.append({
+                            "title": title,
+                            "company": "See Listing",
+                            "url": full_url,
+                            "score": score,
+                            "salary": "Check Listing",
+                            "location": loc_status,
+                            "source": "PRSA Jobcenter"
+                        })
+                        found_count += 1
+            print(f"  - Found {found_count} matches from PRSA")
         except Exception as e:
             print(f"Error fetching PRSA: {e}")
 
@@ -141,7 +147,12 @@ class JobAggregator:
         try:
             # The Muse API returns JSON
             response = self.scraper.get(config.URLS["TheMuse"], headers=self.get_headers())
+            if response.status_code != 200:
+                print(f"  [ERROR] The Muse returned status code: {response.status_code}")
+                return
+
             data = response.json()
+            found_count = 0
             for job in data.get("results", []):
                 title = job.get("name", "")
                 description = job.get("contents", "")
@@ -169,6 +180,8 @@ class JobAggregator:
                         "location": loc_status,
                         "source": "The Muse"
                     })
+                    found_count += 1
+            print(f"  - Found {found_count} matches from The Muse")
         except Exception as e:
             print(f"Error fetching The Muse: {e}")
 
@@ -176,30 +189,36 @@ class JobAggregator:
         print("Fetching O'Dwyer's PR Jobs...")
         try:
             response = self.scraper.get(config.URLS["ODwyers"], headers=self.get_headers())
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                # O'Dwyer's is a simple table or list. 
-                # Looking for <tr> with job details.
-                # This is a guess at their structure, usually they have <a> tags with job titles.
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    title = link.get_text().strip()
-                    
-                    # Filter for job-like links (usually contain 'job' or are in a specific list)
-                    # O'Dwyer's links often look like "job_view.php?job_id=..."
-                    if "job_view" in href or "job_id" in href:
-                        score, loc_status = self.score_job(title, title)
-                        if score >= config.MIN_SCORE_THRESHOLD:
-                            full_url = f"https://www.odwyerpr.com/pr_jobs/{href}" if not href.startswith("http") else href
-                            self.jobs.append({
-                                "title": title,
-                                "company": "See Listing",
-                                "url": full_url,
-                                "score": score,
-                                "salary": "Check Listing",
-                                "location": loc_status,
-                                "source": "O'Dwyer's PR"
-                            })
+            if response.status_code != 200:
+                print(f"  [ERROR] O'Dwyer's returned status code: {response.status_code}")
+                return
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # O'Dwyer's is a simple table or list. 
+            # Looking for <tr> with job details.
+            # This is a guess at their structure, usually they have <a> tags with job titles.
+            found_count = 0
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                title = link.get_text().strip()
+                
+                # Filter for job-like links (usually contain 'job' or are in a specific list)
+                # O'Dwyer's links often look like "job_view.php?job_id=..."
+                if "job_view" in href or "job_id" in href:
+                    score, loc_status = self.score_job(title, title)
+                    if score >= config.MIN_SCORE_THRESHOLD:
+                        full_url = f"https://www.odwyerpr.com/pr_jobs/{href}" if not href.startswith("http") else href
+                        self.jobs.append({
+                            "title": title,
+                            "company": "See Listing",
+                            "url": full_url,
+                            "score": score,
+                            "salary": "Check Listing",
+                            "location": loc_status,
+                            "source": "O'Dwyer's PR"
+                        })
+                        found_count += 1
+            print(f"  - Found {found_count} matches from O'Dwyer's")
         except Exception as e:
             print(f"Error fetching O'Dwyer's: {e}")
 
@@ -208,33 +227,39 @@ class JobAggregator:
         try:
             # Use cloudscraper to bypass Cloudflare/403
             response = self.scraper.get(config.URLS["EntertainmentCareers"], headers=self.get_headers())
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    title = link.get_text().strip()
+            if response.status_code != 200:
+                print(f"  [ERROR] EntertainmentCareers returned status code: {response.status_code}")
+                return
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            found_count = 0
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                title = link.get_text().strip()
+                
+                # Precise Logic based on Debug Analysis:
+                # Valid Job URL: /company-name/job-title/job/123456/
+                # We look for "/job/" in the path AND a numeric ID at the end (usually)
+                
+                if "/job/" in href and len(title) > 10:
+                    score, loc_status = self.score_job(title, title) 
                     
-                    # Precise Logic based on Debug Analysis:
-                    # Valid Job URL: /company-name/job-title/job/123456/
-                    # We look for "/job/" in the path AND a numeric ID at the end (usually)
+                    # Boost for being on EC.net
+                    score += 10 
                     
-                    if "/job/" in href and len(title) > 10:
-                        score, loc_status = self.score_job(title, title) 
-                        
-                        # Boost for being on EC.net
-                        score += 10 
-                        
-                        if score >= config.MIN_SCORE_THRESHOLD:
-                            full_url = f"https://www.entertainmentcareers.net{href}" if href.startswith("/") else href
-                            self.jobs.append({
-                                "title": title,
-                                "company": "See Listing",
-                                "url": full_url,
-                                "score": score,
-                                "salary": "Check Listing",
-                                "location": loc_status,
-                                "source": "EntertainmentCareers.net"
-                            })
+                    if score >= config.MIN_SCORE_THRESHOLD:
+                        full_url = f"https://www.entertainmentcareers.net{href}" if href.startswith("/") else href
+                        self.jobs.append({
+                            "title": title,
+                            "company": "See Listing",
+                            "url": full_url,
+                            "score": score,
+                            "salary": "Check Listing",
+                            "location": loc_status,
+                            "source": "EntertainmentCareers.net"
+                        })
+                        found_count += 1
+            print(f"  - Found {found_count} matches from EntertainmentCareers")
         except Exception as e:
             print(f"Skipping EntertainmentCareers: {e}")
 
