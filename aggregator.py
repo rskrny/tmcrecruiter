@@ -7,6 +7,7 @@ import config
 import re
 import cloudscraper
 from fake_useragent import UserAgent
+from curl_cffi import requests as cffi_requests
 
 class JobAggregator:
     def __init__(self):
@@ -280,6 +281,82 @@ class JobAggregator:
         except Exception as e:
             print(f"Error fetching O'Dwyer's: {e}")
 
+    def fetch_indeed(self):
+        print("Fetching Indeed (Experimental with curl_cffi)...")
+        try:
+            # Use curl_cffi with chrome impersonation to bypass TLS fingerprinting
+            response = cffi_requests.get(
+                config.URLS["Indeed"], 
+                impersonate="chrome",
+                headers={
+                    'User-Agent': self.ua.random,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Referer': 'https://www.google.com/',
+                }
+            )
+            
+            if response.status_code != 200:
+                print(f"  [ERROR] Indeed returned status code: {response.status_code}")
+                return
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            found_count = 0
+            
+            # Indeed structure is complex and changes often.
+            # We look for the main job card container.
+            # Common classes: 'job_seen_beacon', 'resultContent', 'cardOutline'
+            
+            # Strategy: Find all <h2> with class 'jobTitle'
+            job_titles = soup.find_all('h2', class_=lambda x: x and 'jobTitle' in x)
+            
+            for h2 in job_titles:
+                link = h2.find('a')
+                if not link: continue
+                
+                title = link.get_text().strip()
+                href = link['href']
+                full_url = f"https://www.indeed.com{href}" if href.startswith("/") else href
+                
+                # Try to find company and location relative to the title
+                # Usually in the same 'resultContent' or parent div
+                card = h2.find_parent('div', class_='job_seen_beacon') or h2.find_parent('td', class_='resultContent')
+                
+                company = "Indeed Listing"
+                location = "Los Angeles, CA" # Default since we searched for it
+                
+                if card:
+                    company_elem = card.find('span', class_='companyName') or card.find('span', attrs={'data-testid': 'company-name'})
+                    if company_elem:
+                        company = company_elem.get_text().strip()
+                        
+                    location_elem = card.find('div', class_='companyLocation') or card.find('div', attrs={'data-testid': 'text-location'})
+                    if location_elem:
+                        location = location_elem.get_text().strip()
+
+                score, loc_status = self.score_job(title, title) # Description not available on list view
+                
+                # If location matches our target, boost score
+                if "Los Angeles" in location or "CA" in location:
+                    score += 10
+                    
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    self.jobs.append({
+                        "title": title,
+                        "company": company,
+                        "url": full_url,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": location,
+                        "source": "Indeed"
+                    })
+                    found_count += 1
+            
+            print(f"  - Found {found_count} matches from Indeed")
+            
+        except Exception as e:
+            print(f"Error fetching Indeed: {e}")
+
     def fetch_entertainment_careers(self):
         print("Fetching EntertainmentCareers.net (Stealth Mode)...")
         try:
@@ -366,7 +443,12 @@ class JobAggregator:
         print(f"Fetching {company_name} (Greenhouse)...")
         self.random_sleep()
         try:
-            response = self.scraper.get(url, headers=self.get_headers())
+            # Use curl_cffi to avoid SSL errors and detection
+            response = cffi_requests.get(
+                url, 
+                impersonate="chrome",
+                headers=self.get_headers()
+            )
             if response.status_code != 200:
                 print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
                 return
@@ -449,7 +531,12 @@ class JobAggregator:
         print(f"Fetching {company_name} (Lever)...")
         self.random_sleep()
         try:
-            response = self.scraper.get(url, headers=self.get_headers())
+            # Use curl_cffi to avoid SSL errors and detection
+            response = cffi_requests.get(
+                url, 
+                impersonate="chrome",
+                headers=self.get_headers()
+            )
             if response.status_code != 200:
                 print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
                 return
@@ -496,6 +583,123 @@ class JobAggregator:
         except Exception as e:
             print(f"Error fetching {company_name}: {e}")
 
+    def fetch_workday(self, api_url, company_name, base_url):
+        """Fetches jobs from Workday-based career sites (Disney, Condé Nast, etc.)."""
+        print(f"Fetching {company_name} (Workday)...")
+        self.random_sleep()
+        try:
+            import json as json_lib
+            
+            # Workday requires a session-based approach:
+            # 1. Visit the main careers page first to get cookies
+            # 2. Then make the API call with those cookies
+            session = cffi_requests.Session(impersonate="chrome")
+            
+            # Step 1: Get cookies from main page
+            session.get(base_url, timeout=15)
+            
+            # Step 2: Make API call
+            headers = {
+                'Accept': 'application/json, text/plain, */*',
+                'Content-Type': 'application/json',
+            }
+            # Note: Some Workday sites have issues with limit > 20
+            payload = json_lib.dumps({'limit': 20, 'offset': 0})
+            
+            response = session.post(
+                api_url,
+                headers=headers,
+                data=payload,
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
+                return
+            
+            data = response.json()
+            found_count = 0
+            
+            for job in data.get("jobPostings", []):
+                title = job.get("title", "")
+                location_text = job.get("locationsText", "Unknown")
+                external_path = job.get("externalPath", "")
+                
+                full_text = f"{title} {location_text}"
+                score, loc_status = self.score_job(title, full_text)
+                score += 20  # Major entertainment company boost
+                
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    full_url = f"{base_url}{external_path}"
+                    
+                    self.jobs.append({
+                        "title": title,
+                        "company": company_name,
+                        "url": full_url,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": location_text,
+                        "source": f"{company_name} (Direct)"
+                    })
+                    found_count += 1
+                    
+            print(f"  - Found {found_count} matches from {company_name}")
+            
+        except Exception as e:
+            print(f"Error fetching {company_name}: {e}")
+
+    def fetch_netflix(self, api_url, company_name):
+        """Fetches jobs from Netflix's custom career API."""
+        print(f"Fetching {company_name} (Custom API)...")
+        self.random_sleep()
+        try:
+            # Netflix uses a GET request with limit param
+            response = cffi_requests.get(
+                f"{api_url}?limit=100",
+                impersonate="chrome",
+                headers=self.get_headers(),
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
+                return
+            
+            data = response.json()
+            found_count = 0
+            
+            for job in data.get("positions", []):
+                title = job.get("name", "")
+                location_text = job.get("location", "Unknown")
+                job_id = job.get("id", "")
+                
+                # Netflix also provides department info
+                department = job.get("department", "")
+                full_text = f"{title} {location_text} {department}"
+                
+                score, loc_status = self.score_job(title, full_text)
+                score += 25  # Netflix is a prime target - big boost
+                
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    # Netflix job URLs follow this pattern
+                    full_url = f"https://jobs.netflix.com/jobs/{job_id}"
+                    
+                    self.jobs.append({
+                        "title": title,
+                        "company": company_name,
+                        "url": full_url,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": location_text if location_text else loc_status,
+                        "source": f"{company_name} (Direct)"
+                    })
+                    found_count += 1
+                    
+            print(f"  - Found {found_count} matches from {company_name}")
+            
+        except Exception as e:
+            print(f"Error fetching {company_name}: {e}")
+
     def fetch_ats_sources(self):
         """Iterates through configured ATS sources."""
         for source in config.ATS_SOURCES:
@@ -503,13 +707,18 @@ class JobAggregator:
                 self.fetch_greenhouse(source["url"], source["name"])
             elif source["type"] == "lever":
                 self.fetch_lever(source["url"], source["name"])
+            elif source["type"] == "workday":
+                self.fetch_workday(source["url"], source["name"], source.get("base_url", ""))
+            elif source["type"] == "netflix":
+                self.fetch_netflix(source["url"], source["name"])
 
     def get_jobs(self):
         self.fetch_prsa()
         self.fetch_themuse()
+        # self.fetch_indeed() # Disabled: 403 Forbidden (Anti-bot)
         self.fetch_entertainment_careers()
         self.fetch_odwyers()
-        self.fetch_ats_sources() # NEW: Direct Agency Scraping
+        self.fetch_ats_sources() # Direct Agency Scraping (Greenhouse, Lever, Workday, Netflix)
         self.fetch_weworkremotely()
         # self.fetch_remotive() # Disabled: Too much tech noise
         # self.fetch_working_nomads() # Disabled: Too much tech noise
