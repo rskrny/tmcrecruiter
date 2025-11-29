@@ -4,3 +4,4 @@ beautifulsoup4
 cloudscraper
 fake_useragent
 curl_cffi
+google-generativeai

@@ -12,22 +12,31 @@ def post_to_telegram(jobs):
 
     print(f"Posting {len(jobs)} jobs to Telegram...")
 
-    for job in jobs:
-        # Format the message
-        # 🎯 SCORE: 85
-        # 💼 Role: Public Relations Manager
-        # 🏢 Company: Acme Corp
-        # 📍 Location: Los Angeles (Likely Hybrid)
-        # 💰 Salary: $80k-120k
-        # 🔗 Apply: [Link]
+    for i, job in enumerate(jobs):
+        # New format with AI analysis
+        ai_score = job.get('ai_score', job.get('score', 0))
+        ai_reasoning = job.get('ai_reasoning', 'No AI analysis available')
+        ai_highlights = job.get('ai_highlights', [])
+        requirements = job.get('ai_requirements', [])
+        
+        # Build requirements section
+        if requirements:
+            req_text = "\n".join([f"  • {req}" for req in requirements[:4]])
+        elif ai_highlights:
+            req_text = "\n".join([f"  • {h}" for h in ai_highlights[:4]])
+        else:
+            req_text = "  • See full listing for details"
+        
+        # Match rating display (stars)
+        stars = "⭐" * min(ai_score, 10) if ai_score else "N/A"
         
         message = (
-            f"🎯 *SNIPER SCORE: {job['score']}*\n"
-            f"💼 *Role:* {job['title']}\n"
-            f"🏢 *Company:* {job['company']}\n"
-            f"📍 *Location:* {job.get('location', 'Remote')}\n"
-            f"💰 *Salary:* {job.get('salary', 'Not listed')}\n"
-            f"🌐 *Source:* {job['source']}\n\n"
+            f"💼 *{job['title']}*\n"
+            f"🏢 {job['company']}\n\n"
+            f"🤖 *AI Analysis:*\n_{ai_reasoning}_\n\n"
+            f"📍 *Location:* {job.get('location', 'Remote')}\n\n"
+            f"📋 *Key Points:*\n{req_text}\n\n"
+            f"🎯 *Match Rating:* {ai_score}/10 {stars}\n\n"
             f"🔗 [Apply Here]({job['url']})"
         )
 
@@ -42,5 +51,6 @@ def post_to_telegram(jobs):
         try:
             response = requests.post(url, json=payload)
             response.raise_for_status()
+            print(f"  [{i+1}/{len(jobs)}] Posted: {job['title']} @ {job['company']}")
         except requests.exceptions.RequestException as e:
-            print(f"Failed to send message: {e}")
+            print(f"  [{i+1}/{len(jobs)}] Failed to send: {e}")
