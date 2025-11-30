@@ -199,6 +199,13 @@ ATS_SOURCES = [
     
     # CREATIVE / TECH with strong comms depts
     {"name": "Skillshare", "url": "https://jobs.lever.co/skillshare", "type": "lever"},
+    
+    # TALENT AGENCIES (Big 3) - All use Workday
+    {"name": "CAA", "url": "https://caa.wd1.myworkdayjobs.com/wday/cxs/caa/Careers/jobs", "type": "workday", "base_url": "https://caa.wd1.myworkdayjobs.com/en-US/Careers"},
+    {"name": "UTA", "url": "https://unitedtalent.wd5.myworkdayjobs.com/wday/cxs/unitedtalent/uta/jobs", "type": "workday", "base_url": "https://unitedtalent.wd5.myworkdayjobs.com/en-US/uta"},
+    
+    # MAJOR STUDIOS / ENTERTAINMENT
+    {"name": "NBCUniversal", "url": "https://jobs.smartrecruiters.com/NBCUniversal3", "type": "smartrecruiters"},
 ]
 
 # RSS Feed for Working Nomads specifically

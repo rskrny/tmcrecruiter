@@ -700,6 +700,58 @@ class JobAggregator:
         except Exception as e:
             print(f"Error fetching {company_name}: {e}")
 
+    def fetch_smartrecruiters(self, company_url, company_name):
+        """Fetches jobs from SmartRecruiters (NBCUniversal, etc.)."""
+        print(f"Fetching {company_name} (SmartRecruiters)...")
+        self.random_sleep()
+        try:
+            # SmartRecruiters API endpoint
+            company_id = company_url.split('/')[-1]
+            api_url = f"https://api.smartrecruiters.com/v1/companies/{company_id}/postings"
+            
+            response = cffi_requests.get(
+                api_url,
+                impersonate="chrome",
+                headers=self.get_headers(),
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                print(f"  [ERROR] {company_name} returned status code: {response.status_code}")
+                return
+            
+            data = response.json()
+            found_count = 0
+            
+            for job in data.get("content", []):
+                title = job.get("name", "")
+                location_data = job.get("location", {})
+                location_text = location_data.get("city", "") or location_data.get("region", "") or "Unknown"
+                job_id = job.get("id", "")
+                
+                full_text = f"{title} {location_text}"
+                score, loc_status = self.score_job(title, full_text)
+                score += 25  # Major entertainment company boost
+                
+                if score >= config.MIN_SCORE_THRESHOLD:
+                    full_url = f"https://jobs.smartrecruiters.com/{company_id}/{job_id}"
+                    
+                    self.jobs.append({
+                        "title": title,
+                        "company": company_name,
+                        "url": full_url,
+                        "score": score,
+                        "salary": "Check Listing",
+                        "location": location_text,
+                        "source": f"{company_name} (Direct)"
+                    })
+                    found_count += 1
+                    
+            print(f"  - Found {found_count} matches from {company_name}")
+            
+        except Exception as e:
+            print(f"Error fetching {company_name}: {e}")
+
     def fetch_ats_sources(self):
         """Iterates through configured ATS sources."""
         for source in config.ATS_SOURCES:
@@ -711,6 +763,8 @@ class JobAggregator:
                 self.fetch_workday(source["url"], source["name"], source.get("base_url", ""))
             elif source["type"] == "netflix":
                 self.fetch_netflix(source["url"], source["name"])
+            elif source["type"] == "smartrecruiters":
+                self.fetch_smartrecruiters(source["url"], source["name"])
 
     def get_jobs(self):
         self.fetch_prsa()

@@ -69,7 +69,7 @@ class GeminiJobFilter:
             return
             
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
         self.enabled = True
         self.rate_limit_delay = 1.0  # Seconds between API calls to avoid rate limits
         
